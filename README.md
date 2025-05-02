@@ -35,9 +35,8 @@ emotion-recognition/
 ├── requirements.txt     
 ├── README.md  
 
-
-
 ---
+
 
 ## 🚀 How to Run
 
@@ -48,3 +47,37 @@ emotion-recognition/
    pip install -r requirements.txt
 3. Run the Project
    python main.py
+
+---
+
+## 🖼️ Screenshots
+
+| Happy | Angry | Sad |
+|-------|-------|-----|
+| ![](screenshots/happy.png) | ![](screenshots/angry.png) | ![](screenshots/sad.png) |
+
+---
+
+## 🎬 Demo
+
+[![Watch the demo](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 👨‍💻 Author
+
+- **Mrinal Rajpoot**  
+- [LinkedIn](https://www.linkedin.com/in/mrinal-rajput-38606a247)  
+- 📧 mrinal.rajpoot.dev@gmail.com  
+
+
+
+
+
+
