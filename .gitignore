@@ -1,0 +1,45 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environment
+.venv/
+env/
+venv/
+ENV/
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints/
+
+# PyCharm & VSCode
+.idea/
+.vscode/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Python virtualenv binary folders
+bin/
+lib/
+Lib/
+Scripts/
+
+# Ignore model/data files if any
+*.h5
+*.ckpt
+*.tflite
+*.pb
+*.pkl
+*.npy
+*.npz
+*.onnx
+*.joblib
+
+# Ignore datasets
+data/
+datasets/
