@@ -1,0 +1,645 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Emotion Recognition Model Training\n",
+    "\n",
+    "This notebook trains a CNN model on the fer2013 dataset for facial emotion recognition."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1. Import Required Libraries"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns\n",
+    "import os\n",
+    "from pathlib import Path\n",
+    "\n",
+    "import tensorflow as tf\n",
+    "from tensorflow import keras\n",
+    "from tensorflow.keras.models import Sequential\n",
+    "from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPooling2D, BatchNormalization\n",
+    "from tensorflow.keras.optimizers import Adam\n",
+    "from tensorflow.keras.preprocessing.image import ImageDataGenerator\n",
+    "from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau\n",
+    "from tensorflow.keras.utils import to_categorical\n",
+    "\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.metrics import classification_report, confusion_matrix\n",
+    "\n",
+    "# Set random seeds for reproducibility\n",
+    "np.random.seed(42)\n",
+    "tf.random.set_seed(42)\n",
+    "\n",
+    "print(f\"TensorFlow version: {tf.__version__}\")\n",
+    "print(f\"GPU available: {tf.config.list_physical_devices('GPU')}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2. Load and Explore the fer2013 Dataset"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Download the dataset if not present\n",
+    "# Note: You may need to download fer2013.csv manually from Kaggle\n",
+    "# https://www.kaggle.com/datasets/msambare/fer2013\n",
+    "\n",
+    "# Try to load from different possible locations\n",
+    "dataset_paths = [\n",
+    "    'fer2013.csv',\n",
+    "    '../data/fer2013.csv',\n",
+    "    'data/fer2013.csv',\n",
+    "    '/content/fer2013.csv'  # For Google Colab\n",
+    "]\n",
+    "\n",
+    "data = None\n",
+    "for path in dataset_paths:\n",
+    "    if os.path.exists(path):\n",
+    "        print(f\"Loading dataset from: {path}\")\n",
+    "        data = pd.read_csv(path)\n",
+    "        break\n",
+    "\n",
+    "if data is None:\n",
+    "    print(\"Dataset not found. Please download fer2013.csv from Kaggle.\")\n",
+    "    print(\"You can use the following code to load from URL if you have the direct link:\")\n",
+    "    print(\"# data = pd.read_csv('your_url_here')\")\n",
+    "    raise FileNotFoundError(\"fer2013.csv not found\")\n",
+    "\n",
+    "# Display basic information\n",
+    "print(f\"Dataset shape: {data.shape}\")\n",
+    "print(\"\\nFirst few rows:\")\n",
+    "data.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Explore the dataset\n",
+    "print(\"Dataset info:\")\n",
+    "data.info()\n",
+    "\n",
+    "print(\"\\nEmotion distribution:\")\n",
+    "emotion_counts = data['emotion'].value_counts().sort_index()\n",
+    "print(emotion_counts)\n",
+    "\n",
+    "# Define emotion labels\n",
+    "emotion_labels = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']\n",
+    "\n",
+    "# Plot emotion distribution\n",
+    "plt.figure(figsize=(10, 6))\n",
+    "plt.bar(emotion_labels, emotion_counts.values)\n",
+    "plt.title('Emotion Distribution in fer2013 Dataset')\n",
+    "plt.xlabel('Emotion')\n",
+    "plt.ylabel('Count')\n",
+    "plt.xticks(rotation=45)\n",
+    "plt.tight_layout()\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3. Preprocess the Data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Convert pixel strings to numpy arrays\n",
+    "def pixels_to_array(pixel_string):\n",
+    "    pixels = np.array(pixel_string.split(), dtype='float32')\n",
+    "    return pixels.reshape(48, 48)\n",
+    "\n",
+    "# Process all images\n",
+    "print(\"Converting pixel strings to arrays...\")\n",
+    "X = np.array([pixels_to_array(pixels) for pixels in data['pixels']])\n",
+    "y = data['emotion'].values\n",
+    "\n",
+    "print(f\"X shape: {X.shape}\")\n",
+    "print(f\"y shape: {y.shape}\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Normalize pixel values\n",
+    "X = X / 255.0\n",
+    "\n",
+    "# Add channel dimension (grayscale images have 1 channel)\n",
+    "X = X.reshape(X.shape[0], 48, 48, 1)\n",
+    "\n",
+    "# Convert labels to categorical\n",
+    "y_categorical = to_categorical(y, num_classes=7)\n",
+    "\n",
+    "print(f\"X shape after preprocessing: {X.shape}\")\n",
+    "print(f\"y_categorical shape: {y_categorical.shape}\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Display sample images\n",
+    "fig, axes = plt.subplots(2, 4, figsize=(12, 6))\n",
+    "axes = axes.ravel()\n",
+    "\n",
+    "for i in range(8):\n",
+    "    idx = np.random.randint(0, len(X))\n",
+    "    axes[i].imshow(X[idx].reshape(48, 48), cmap='gray')\n",
+    "    axes[i].set_title(f'Emotion: {emotion_labels[y[idx]]}')\n",
+    "    axes[i].axis('off')\n",
+    "\n",
+    "plt.tight_layout()\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4. Split the Data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Split into train and test sets\n",
+    "X_train, X_test, y_train, y_test = train_test_split(\n",
+    "    X, y_categorical, test_size=0.2, random_state=42, stratify=y\n",
+    ")\n",
+    "\n",
+    "# Further split train into train and validation\n",
+    "X_train, X_val, y_train, y_val = train_test_split(\n",
+    "    X_train, y_train, test_size=0.2, random_state=42\n",
+    ")\n",
+    "\n",
+    "# Also keep the original labels for evaluation\n",
+    "_, y_test_labels = train_test_split(y, test_size=0.2, random_state=42, stratify=y)\n",
+    "\n",
+    "print(f\"Training set shape: {X_train.shape}\")\n",
+    "print(f\"Validation set shape: {X_val.shape}\")\n",
+    "print(f\"Test set shape: {X_test.shape}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 5. Data Augmentation"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Create data generators with augmentation for training\n",
+    "train_datagen = ImageDataGenerator(\n",
+    "    rotation_range=15,\n",
+    "    width_shift_range=0.1,\n",
+    "    height_shift_range=0.1,\n",
+    "    horizontal_flip=True,\n",
+    "    zoom_range=0.1,\n",
+    "    shear_range=0.1,\n",
+    "    fill_mode='nearest'\n",
+    ")\n",
+    "\n",
+    "val_datagen = ImageDataGenerator()\n",
+    "\n",
+    "# Fit the generator\n",
+    "train_datagen.fit(X_train)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 6. Build the CNN Model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Build the CNN model\n",
+    "model = Sequential([\n",
+    "    # First convolutional block\n",
+    "    Conv2D(32, (3, 3), activation='relu', padding='same', input_shape=(48, 48, 1)),\n",
+    "    BatchNormalization(),\n",
+    "    Conv2D(32, (3, 3), activation='relu', padding='same'),\n",
+    "    BatchNormalization(),\n",
+    "    MaxPooling2D(pool_size=(2, 2)),\n",
+    "    Dropout(0.25),\n",
+    "    \n",
+    "    # Second convolutional block\n",
+    "    Conv2D(64, (3, 3), activation='relu', padding='same'),\n",
+    "    BatchNormalization(),\n",
+    "    Conv2D(64, (3, 3), activation='relu', padding='same'),\n",
+    "    BatchNormalization(),\n",
+    "    MaxPooling2D(pool_size=(2, 2)),\n",
+    "    Dropout(0.25),\n",
+    "    \n",
+    "    # Third convolutional block\n",
+    "    Conv2D(128, (3, 3), activation='relu', padding='same'),\n",
+    "    BatchNormalization(),\n",
+    "    Conv2D(128, (3, 3), activation='relu', padding='same'),\n",
+    "    BatchNormalization(),\n",
+    "    MaxPooling2D(pool_size=(2, 2)),\n",
+    "    Dropout(0.25),\n",
+    "    \n",
+    "    # Fourth convolutional block\n",
+    "    Conv2D(256, (3, 3), activation='relu', padding='same'),\n",
+    "    BatchNormalization(),\n",
+    "    Conv2D(256, (3, 3), activation='relu', padding='same'),\n",
+    "    BatchNormalization(),\n",
+    "    MaxPooling2D(pool_size=(2, 2)),\n",
+    "    Dropout(0.25),\n",
+    "    \n",
+    "    # Fully connected layers\n",
+    "    Flatten(),\n",
+    "    Dense(512, activation='relu'),\n",
+    "    BatchNormalization(),\n",
+    "    Dropout(0.5),\n",
+    "    Dense(256, activation='relu'),\n",
+    "    BatchNormalization(),\n",
+    "    Dropout(0.5),\n",
+    "    Dense(7, activation='softmax')  # 7 emotion classes\n",
+    "])\n",
+    "\n",
+    "# Compile the model\n",
+    "model.compile(\n",
+    "    optimizer=Adam(learning_rate=0.001),\n",
+    "    loss='categorical_crossentropy',\n",
+    "    metrics=['accuracy']\n",
+    ")\n",
+    "\n",
+    "# Display model summary\n",
+    "model.summary()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 7. Set up Callbacks"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Create models directory if it doesn't exist\n",
+    "models_dir = Path('/models')\n",
+    "if not models_dir.exists():\n",
+    "    models_dir = Path('models')  # Use relative path if absolute path doesn't work\n",
+    "    models_dir.mkdir(exist_ok=True)\n",
+    "\n",
+    "# Define callbacks\n",
+    "checkpoint = ModelCheckpoint(\n",
+    "    filepath=str(models_dir / 'emotion_model_best.h5'),\n",
+    "    monitor='val_accuracy',\n",
+    "    save_best_only=True,\n",
+    "    mode='max',\n",
+    "    verbose=1\n",
+    ")\n",
+    "\n",
+    "early_stopping = EarlyStopping(\n",
+    "    monitor='val_accuracy',\n",
+    "    patience=15,\n",
+    "    restore_best_weights=True,\n",
+    "    verbose=1\n",
+    ")\n",
+    "\n",
+    "reduce_lr = ReduceLROnPlateau(\n",
+    "    monitor='val_loss',\n",
+    "    factor=0.5,\n",
+    "    patience=5,\n",
+    "    min_lr=1e-7,\n",
+    "    verbose=1\n",
+    ")\n",
+    "\n",
+    "callbacks = [checkpoint, early_stopping, reduce_lr]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 8. Train the Model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Set training parameters\n",
+    "BATCH_SIZE = 64\n",
+    "EPOCHS = 50\n",
+    "\n",
+    "# Train the model\n",
+    "history = model.fit(\n",
+    "    train_datagen.flow(X_train, y_train, batch_size=BATCH_SIZE),\n",
+    "    steps_per_epoch=len(X_train) // BATCH_SIZE,\n",
+    "    epochs=EPOCHS,\n",
+    "    validation_data=val_datagen.flow(X_val, y_val, batch_size=BATCH_SIZE),\n",
+    "    validation_steps=len(X_val) // BATCH_SIZE,\n",
+    "    callbacks=callbacks,\n",
+    "    verbose=1\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 9. Visualize Training History"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Plot training history\n",
+    "fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))\n",
+    "\n",
+    "# Plot accuracy\n",
+    "ax1.plot(history.history['accuracy'], label='Train Accuracy')\n",
+    "ax1.plot(history.history['val_accuracy'], label='Val Accuracy')\n",
+    "ax1.set_title('Model Accuracy')\n",
+    "ax1.set_xlabel('Epoch')\n",
+    "ax1.set_ylabel('Accuracy')\n",
+    "ax1.legend()\n",
+    "ax1.grid(True)\n",
+    "\n",
+    "# Plot loss\n",
+    "ax2.plot(history.history['loss'], label='Train Loss')\n",
+    "ax2.plot(history.history['val_loss'], label='Val Loss')\n",
+    "ax2.set_title('Model Loss')\n",
+    "ax2.set_xlabel('Epoch')\n",
+    "ax2.set_ylabel('Loss')\n",
+    "ax2.legend()\n",
+    "ax2.grid(True)\n",
+    "\n",
+    "plt.tight_layout()\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 10. Evaluate the Model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Evaluate on test set\n",
+    "test_loss, test_accuracy = model.evaluate(X_test, y_test, verbose=0)\n",
+    "print(f\"Test Loss: {test_loss:.4f}\")\n",
+    "print(f\"Test Accuracy: {test_accuracy:.4f}\")\n",
+    "\n",
+    "# Get predictions\n",
+    "y_pred = model.predict(X_test)\n",
+    "y_pred_classes = np.argmax(y_pred, axis=1)\n",
+    "\n",
+    "# Print classification report\n",
+    "print(\"\\nClassification Report:\")\n",
+    "print(classification_report(y_test_labels, y_pred_classes, target_names=emotion_labels))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Plot confusion matrix\n",
+    "cm = confusion_matrix(y_test_labels, y_pred_classes)\n",
+    "\n",
+    "plt.figure(figsize=(10, 8))\n",
+    "sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', \n",
+    "            xticklabels=emotion_labels, yticklabels=emotion_labels)\n",
+    "plt.title('Confusion Matrix')\n",
+    "plt.ylabel('True Label')\n",
+    "plt.xlabel('Predicted Label')\n",
+    "plt.tight_layout()\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 11. Display Sample Predictions"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Display some test predictions\n",
+    "fig, axes = plt.subplots(3, 4, figsize=(15, 12))\n",
+    "axes = axes.ravel()\n",
+    "\n",
+    "# Randomly select 12 test images\n",
+    "indices = np.random.choice(len(X_test), 12, replace=False)\n",
+    "\n",
+    "for i, idx in enumerate(indices):\n",
+    "    # Get prediction\n",
+    "    pred = model.predict(X_test[idx:idx+1])\n",
+    "    pred_class = np.argmax(pred)\n",
+    "    pred_prob = np.max(pred)\n",
+    "    true_class = y_test_labels[idx]\n",
+    "    \n",
+    "    # Display image\n",
+    "    axes[i].imshow(X_test[idx].reshape(48, 48), cmap='gray')\n",
+    "    axes[i].set_title(f'True: {emotion_labels[true_class]}\\nPred: {emotion_labels[pred_class]} ({pred_prob:.2f})',\n",
+    "                      color='green' if pred_class == true_class else 'red')\n",
+    "    axes[i].axis('off')\n",
+    "\n",
+    "plt.tight_layout()\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 12. Save the Final Model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Save the final model\n",
+    "final_model_path = models_dir / 'emotion_model.h5'\n",
+    "model.save(str(final_model_path))\n",
+    "print(f\"Model saved to: {final_model_path}\")\n",
+    "\n",
+    "# Also save in TensorFlow SavedModel format for more flexibility\n",
+    "savedmodel_path = models_dir / 'emotion_model_savedmodel'\n",
+    "model.save(str(savedmodel_path))\n",
+    "print(f\"Model saved in SavedModel format to: {savedmodel_path}\")\n",
+    "\n",
+    "# Save model architecture as JSON\n",
+    "model_json = model.to_json()\n",
+    "with open(models_dir / 'emotion_model_architecture.json', 'w') as json_file:\n",
+    "    json_file.write(model_json)\n",
+    "print(\"Model architecture saved as JSON\")\n",
+    "\n",
+    "# Save training history\n",
+    "import pickle\n",
+    "with open(models_dir / 'training_history.pkl', 'wb') as file:\n",
+    "    pickle.dump(history.history, file)\n",
+    "print(\"Training history saved\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 13. Model Summary and Next Steps"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Print final summary\n",
+    "print(\"=\" * 50)\n",
+    "print(\"TRAINING COMPLETE\")\n",
+    "print(\"=\" * 50)\n",
+    "print(f\"Final Test Accuracy: {test_accuracy:.2%}\")\n",
+    "print(f\"Model saved to: {final_model_path}\")\n",
+    "print(\"\\nEmotion Classes:\")\n",
+    "for i, emotion in enumerate(emotion_labels):\n",
+    "    print(f\"  {i}: {emotion}\")\n",
+    "\n",
+    "print(\"\\nNext Steps:\")\n",
+    "print(\"1. Use the saved model for real-time emotion detection\")\n",
+    "print(\"2. Deploy the model in a web application\")\n",
+    "print(\"3. Fine-tune the model with additional data\")\n",
+    "print(\"4. Experiment with different architectures\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Optional: Test with a single prediction function\n",
+    "def predict_emotion(model, image_array):\n",
+    "    \"\"\"\n",
+    "    Predict emotion from a single image array.\n",
+    "    \n",
+    "    Args:\n",
+    "        model: Trained Keras model\n",
+    "        image_array: Numpy array of shape (48, 48) with pixel values 0-255\n",
+    "    \n",
+    "    Returns:\n",
+    "        emotion_label: Predicted emotion as string\n",
+    "        confidence: Confidence score\n",
+    "    \"\"\"\n",
+    "    # Preprocess image\n",
+    "    img = image_array.astype('float32') / 255.0\n",
+    "    img = img.reshape(1, 48, 48, 1)\n",
+    "    \n",
+    "    # Make prediction\n",
+    "    predictions = model.predict(img)\n",
+    "    emotion_idx = np.argmax(predictions[0])\n",
+    "    confidence = np.max(predictions[0])\n",
+    "    \n",
+    "    return emotion_labels[emotion_idx], confidence\n",
+    "\n",
+    "# Test the function\n",
+    "test_idx = np.random.randint(0, len(X_test))\n",
+    "test_image = (X_test[test_idx] * 255).astype('uint8').reshape(48, 48)\n",
+    "predicted_emotion, confidence = predict_emotion(model, test_image)\n",
+    "\n",
+    "print(f\"\\nSample prediction:\")\n",
+    "print(f\"Predicted emotion: {predicted_emotion}\")\n",
+    "print(f\"Confidence: {confidence:.2%}\")\n",
+    "print(f\"True emotion: {emotion_labels[y_test_labels[test_idx]]}\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
