@@ -27,8 +27,11 @@ An AI-powered real-time **Emotion Detection System** that uses facial expression
 ## 🗂️ Project Structure
 
 emotion-recognition/
+
 │
+
 ├── README.md
+
 ├── requirements.txt
 ├── main.py
 ├── src/
