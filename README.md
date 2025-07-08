@@ -28,20 +28,33 @@ An AI-powered real-time **Emotion Detection System** that uses facial expression
 
 emotion-recognition/
 │
+
 ├── README.md
 
 ├── requirements.txt
+
 ├── main.py
+
 ├── src/
+
 │   ├── detector.py
+
 │   ├── video_utils.py
+
 │   └── emotion_utils.py
+
 ├── models/
+
 │   └── emotion_model.h5
+
 ├── datasets/
+
 │   └── fer2013.csv
+
 ├── notebooks/
+
 │   └── train_model.ipynb
+
 └── screenshots/  ← (Add later after success)
 
 ---
